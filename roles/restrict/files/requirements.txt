@@ -1,0 +1,3 @@
+wsgiref
+httplib2
+requests

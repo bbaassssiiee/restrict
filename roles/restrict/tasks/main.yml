@@ -1,0 +1,86 @@
+---
+
+- name: 'lock password user for ansible user'
+  become: yes
+  command: usermod -L {{ansible_user}}
+
+- name: 'install python virtualenv and pip'
+  become: yes
+  yum: name={{ item }} state=installed
+  with_items:
+    - python-virtualenv
+    - python-pip
+
+- name: 'copy python library requirements for pip'
+  copy: src=requirements.txt dest=/tmp/requirements.txt
+
+- name: 'create virtualenv for ansible'
+  pip: requirements=/tmp/requirements.txt virtualenv=/home/{{ansible_user}} virtualenv_site_packages=yes
+
+- name: 'set temporary attributes for files'
+  become: yes
+  ignore_errors: yes
+  command: chattr -i /home/{{ansible_user}}/{{item}}
+  with_items:
+    - .bashrc
+    - .profile
+    - .bash_profile
+    - .exrc
+
+- name: 'set permissions on virtualenv'
+  become: yes
+  command: chmod -R go+rx /home/{{ansible_user}}
+
+- name: 'link bash to rbash'
+  become: yes
+  file: src=/bin/bash dest=/bin/rbash owner=root group=root state=hard force=yes
+
+- name: 'link tools to allow them'
+  become: yes
+  file: src=/bin/{{ item }} dest=/home/{{ansible_user}}/bin/{{ item }} state=link
+  with_items:
+    - mkdir
+    - echo
+    - rm
+    - bash
+    - tar
+
+- name: 'link tar to gtar'
+  become: yes
+  file: src=/bin/tar dest=/home/{{ansible_user}}/bin/gtar state=link
+
+- name: 'link sudo'
+  become: yes
+  file: src=/usr/bin/{{ item }} dest=/home/{{ansible_user}}/bin/{{ item }} state=link
+  with_items:
+    - sudo
+
+- name: 'create exrc to limit vi'
+  copy: src=exrc dest=/home/{{ansible_user}}/.exrc
+        mode=0444 owner=root group=root
+
+- name: 'create bash_profile to enforce non-interactive use'
+  copy: src=bash_profile dest=/home/{{ ansible_user }}/.bash_profile
+        mode=0444 owner=root group=root
+
+- name: 'create profile to enforce non-interactive use'
+  copy: src=profile dest=/home/{{ ansible_user }}/.profile
+        mode=0444 owner=root group=root
+
+- name: 'create bashrc to limit non-interactive shell enviroment'
+  template: src=bashrc.j2 dest=/home/{{ansible_user}}/.bashrc
+            mode=0444 owner=root group=root
+
+- name: 'lock profile files for writing'
+  become: yes
+  shell: chattr +i /home/{{ansible_user}}/{{item}}
+  with_items:
+    - .bashrc
+    - .exrc
+    - .profile
+    - .bash_profile
+
+- name: 'restricted shell for ansible user'
+  become: yes
+  user: name={{ ansible_user }} shell=/bin/rbash
+
